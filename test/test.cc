@@ -102,6 +102,32 @@ int main() {
 	}
 	std::puts("truncated/empty input rejected, not misread OK");
 
+	// Overflow is rejected without touching the destination: a tenth chunk
+	// whose bits would shift past 64, a value that overflows restoring the
+	// 255 offset, and a value wider than a narrow destination.
+	{
+		auto rejected = [](const std::string& encoded) {
+			const char* p = encoded.data();
+			unsigned long long decoded = 17;
+			return !varint::unserialise_length(&p, p + encoded.size(), decoded) && decoded == 17;
+		};
+		assert(rejected("\xff" + std::string(9, '\0') + "\x82"));
+		assert(rejected("\xff" + std::string(9, '\x7f') + "\x81"));
+
+		auto encoded = varint::serialise_length(65536);
+		const char* p = encoded.data();
+		std::uint16_t narrow = 17;
+		assert(!varint::unserialise_length(&p, p + encoded.size(), narrow) && narrow == 17);
+
+		for (unsigned long long value : {~0ULL, ~0ULL - 255}) {
+			auto max_encoded = varint::serialise_length(value);
+			const char* q = max_encoded.data();
+			unsigned long long decoded = 0;
+			assert(varint::unserialise_length(&q, q + max_encoded.size(), decoded) && decoded == value);
+		}
+	}
+	std::puts("overflowing and too-wide lengths rejected, maximum values kept OK");
+
 	// Strings: exact vectors, then round-trip, including the empty string.
 	expect_length_bytes(0, "00 "); // sanity: reused by the empty-string case below
 	{

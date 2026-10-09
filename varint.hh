@@ -36,6 +36,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -61,7 +62,8 @@ inline std::string serialise_length(unsigned long long len) {
 }
 
 // Reads a length from [*p, end), advancing *p past it. Returns false (and
-// leaves *p unspecified) on truncated or overlong input. Templated on the
+// leaves *p unspecified, `out` unchanged) on truncated or overlong input, on a
+// value that overflows 64 bits, and on a value wider than `out`. Templated on the
 // destination type so it binds to std::uint64_t, unsigned long long, or
 // std::size_t alike -- distinct types under LP64 even at the same width,
 // so a single fixed-type reference parameter would reject some of them.
@@ -72,16 +74,21 @@ inline bool unserialise_length(const char** p, const char* end, T& out) {
 	if (len == 0xff) {
 		len = 0;
 		unsigned shift = 0;
-		constexpr unsigned kMaxShift = sizeof(unsigned long long) * 8 / 7 * 7;
 		for (;;) {
-			if (*p == end || shift > kMaxShift) return false;
+			if (*p == end || shift >= std::numeric_limits<unsigned long long>::digits) return false;
 			auto byte = static_cast<unsigned char>(*(*p)++);
-			len |= static_cast<unsigned long long>(byte & 0x7f) << shift;
+			auto chunk = static_cast<unsigned long long>(byte & 0x7f);
+			// A chunk whose bits would be shifted out of 64 bits is an overflow,
+			// not a value to silently truncate.
+			if (chunk > (std::numeric_limits<unsigned long long>::max() >> shift)) return false;
+			len |= chunk << shift;
 			shift += 7;
 			if (byte & 0x80) break;
 		}
+		if (len > std::numeric_limits<unsigned long long>::max() - 255) return false;
 		len += 255;
 	}
+	if (len > static_cast<unsigned long long>(std::numeric_limits<T>::max())) return false;
 	out = static_cast<T>(len);
 	return true;
 }

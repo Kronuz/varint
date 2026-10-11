@@ -140,18 +140,15 @@ them back out in order.
 
 This continues from a 2026 rewrite inside [`cluster`](https://github.com/Kronuz/cluster)
 (Germán Méndez Bravo's own code, vendored there header-only and
-exception-free for wire compatibility with an existing discovery protocol),
-not from Xapiand's original `length.h`/`length.cc`. That distinction matters:
-Xapiand's original length codec is derived from Xapian's own GPL-licensed
-`pack_uint`/`unpack_uint` (`xapian-core/common/pack.h`) and `net/length.cc`
-(Copyright Olly Betts), so it is not safe to republish under this
-collection's MIT license. `cluster`'s rewrite is a structurally independent
-implementation -- different error-handling model (`bool` return instead of
-exceptions), templated destination type, no file-descriptor streaming
-variants -- written for different constraints, not a copy of that GPL code;
-this library is that same independent implementation, extracted to stand on
-its own so `cluster` (and any other wire-compatible consumer) can depend on
-it instead of each carrying a private copy. See
+exception-free for wire compatibility with an existing discovery protocol).
+It is wire-compatible with Xapiand's original `length.h`/`length.cc`, which
+Xapiand ships under the MIT license with Olly Betts' permission (Xapiand
+commit `1691e5b2e`, 2015). This implementation is structurally independent of
+that code -- a different error-handling model (`bool` return instead of
+exceptions), a templated destination type, no file-descriptor streaming
+variants -- and is extracted to stand on its own so `cluster` (and any other
+wire-compatible consumer) can depend on it instead of each carrying a private
+copy. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for the format in detail and
 [AGENTS.md](AGENTS.md) for the repo map and invariants.
 

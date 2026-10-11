@@ -194,6 +194,37 @@ int main() {
 	}
 	std::puts("pointer overload matches the string overload OK");
 
+	// LEB128: known bytes, round trips, and rejection of truncated or overflowing input.
+	{
+		char buf[varint::leb128::max_bytes];
+		auto bytes = [&](unsigned long long v) { return std::string(buf, varint::leb128::encode(buf, v)); };
+		assert(bytes(0) == std::string("\x00", 1));
+		assert(bytes(127) == "\x7f");
+		assert(bytes(128) == "\x80\x01");
+		assert(bytes(300) == "\xac\x02");
+		assert(bytes(~0ULL).size() == varint::leb128::max_bytes);
+		for (unsigned long long v = 0, step = 1; v < (~0ULL >> 1); v += step, step = step * 3 / 2 + 1) {
+			std::string e = bytes(v);
+			const char* p = e.data();
+			unsigned long long back = 0;
+			assert(varint::leb128::decode(&p, e.data() + e.size(), back) && back == v && p == e.data() + e.size());
+			const char* q = e.data();
+			assert(e.size() == 1 || !varint::leb128::decode(&q, e.data() + e.size() - 1, back));
+		}
+		std::string max = bytes(~0ULL);
+		const char* p = max.data();
+		unsigned long long back = 0;
+		assert(varint::leb128::decode(&p, max.data() + max.size(), back) && back == ~0ULL);
+		std::string over = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x02";  // 2^64 * 1: too wide
+		p = over.data();
+		assert(!varint::leb128::decode(&p, over.data() + over.size(), back));
+		std::uint32_t narrow = 0;
+		std::string wide = bytes(1ULL << 40);
+		p = wide.data();
+		assert(!varint::leb128::decode(&p, wide.data() + wide.size(), narrow));
+	}
+	std::puts("LEB128 encode/decode OK");
+
 	std::puts("all varint tests passed");
 	return 0;
 }

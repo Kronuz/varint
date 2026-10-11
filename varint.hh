@@ -143,4 +143,43 @@ inline bool unserialise_char(const char** p, const char* end, char& out) {
 	return true;
 }
 
+// LEB128: little-endian base-128 where every byte except the last has its top bit
+// set. Smaller than the length format above for values of 255 and more (no marker
+// byte), so it suits large integers such as sparse doc-id gaps; the two formats are
+// not interchangeable.
+namespace leb128 {
+
+// Most bytes a 64-bit value takes.
+inline constexpr std::size_t max_bytes = 10;
+
+// Writes v at out (room for max_bytes) and returns the end.
+inline char* encode(char* out, unsigned long long v) noexcept {
+	while (v >= 0x80) {
+		*out++ = static_cast<char>(static_cast<unsigned char>(v | 0x80));
+		v >>= 7;
+	}
+	*out++ = static_cast<char>(static_cast<unsigned char>(v));
+	return out;
+}
+
+// Reads a value from [*p, end), advancing *p. Returns false on truncated input or a
+// value wider than 64 bits or than `out`.
+template <typename T>
+inline bool decode(const char** p, const char* end, T& out) noexcept {
+	unsigned long long v = 0;
+	for (unsigned shift = 0;; shift += 7) {
+		if (*p == end || shift >= 64) return false;
+		auto byte = static_cast<unsigned char>(*(*p)++);
+		auto chunk = static_cast<unsigned long long>(byte & 0x7f);
+		if (shift == 63 && chunk > 1) return false;
+		v |= chunk << shift;
+		if (!(byte & 0x80)) break;
+	}
+	if (v > static_cast<unsigned long long>(std::numeric_limits<T>::max())) return false;
+	out = static_cast<T>(v);
+	return true;
+}
+
+} // namespace leb128
+
 } // namespace varint

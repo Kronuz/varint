@@ -15,6 +15,9 @@ Four encode/decode pairs over a compact binary wire format:
 - `serialise_string` / `unserialise_string` -- a length-prefixed byte string.
 - `serialise_bool` / `unserialise_bool` -- one ASCII byte, `'0'` or `'1'`.
 - `serialise_char` / `unserialise_char` -- one raw byte.
+- `leb128::encode` / `leb128::decode<T>` -- standard LEB128, a separate format that is
+  smaller for values of 255 and above (no marker byte), for large integers such as
+  sparse doc-id gaps.
 
 The length encoding: a byte below 255 IS the length, verbatim -- the
 overwhelmingly common case (short strings, small counts) costs exactly one

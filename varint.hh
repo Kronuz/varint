@@ -42,23 +42,32 @@
 
 namespace varint {
 
-inline std::string serialise_length(unsigned long long len) {
-	std::string result;
+// Most bytes serialise_length writes: the 0xff marker plus ten base-128 bytes.
+inline constexpr std::size_t max_length_bytes = 11;
+
+// Writes len at out (room for max_length_bytes) and returns the end. No allocation;
+// the bytes are the same as the std::string overload's.
+inline char* serialise_length(char* out, unsigned long long len) noexcept {
 	if (len < 255) {
-		result += static_cast<char>(static_cast<unsigned char>(len));
-		return result;
+		*out++ = static_cast<char>(static_cast<unsigned char>(len));
+		return out;
 	}
-	result += '\xff';
+	*out++ = '\xff';
 	len -= 255;
 	for (;;) {
 		auto digit = static_cast<unsigned char>(len & 0x7f);
 		len >>= 7;
 		if (len == 0) {
-			result += static_cast<char>(digit | 0x80);
-			return result;
+			*out++ = static_cast<char>(digit | 0x80);
+			return out;
 		}
-		result += static_cast<char>(digit);
+		*out++ = static_cast<char>(digit);
 	}
+}
+
+inline std::string serialise_length(unsigned long long len) {
+	char buf[max_length_bytes];
+	return std::string(buf, serialise_length(buf, len));
 }
 
 // Reads a length from [*p, end), advancing *p past it. Returns false (and

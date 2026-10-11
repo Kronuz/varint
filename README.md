@@ -9,7 +9,9 @@ one-byte char -- all exception-free.
 
 Four encode/decode pairs over a compact binary wire format:
 
-- `serialise_length` / `unserialise_length<T>` -- an unsigned integer.
+- `serialise_length` / `unserialise_length<T>` -- an unsigned integer. A
+  `serialise_length(char* out, value)` overload writes into a caller buffer of
+  `max_length_bytes` and returns the end, with no allocation, for hot encoding loops.
 - `serialise_string` / `unserialise_string` -- a length-prefixed byte string.
 - `serialise_bool` / `unserialise_bool` -- one ASCII byte, `'0'` or `'1'`.
 - `serialise_char` / `unserialise_char` -- one raw byte.
@@ -85,6 +87,7 @@ is no separate "how many bytes did that take" step.
 namespace varint {
 
 std::string serialise_length(unsigned long long len);
+char* serialise_length(char* out, unsigned long long len) noexcept;  // room for max_length_bytes
 
 template <typename T>
 bool unserialise_length(const char** p, const char* end, T& out);

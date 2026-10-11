@@ -178,6 +178,22 @@ int main() {
 	}
 	std::puts("bool and char round-trip, including rejecting a bad bool byte, OK");
 
+	// The pointer overload writes the same bytes as the string overload, within max_length_bytes.
+	for (unsigned long long v = 0, step = 1; v < (~0ULL >> 1); v += step, step = step * 3 / 2 + 1) {
+		char buf[varint::max_length_bytes + 1];
+		buf[varint::max_length_bytes] = 'G';
+		char* end = varint::serialise_length(buf, v);
+		assert(std::size_t(end - buf) <= varint::max_length_bytes);
+		assert(std::string(buf, end) == varint::serialise_length(v));
+		assert(buf[varint::max_length_bytes] == 'G');
+	}
+	{
+		char buf[varint::max_length_bytes];
+		char* end = varint::serialise_length(buf, ~0ULL);
+		assert(std::size_t(end - buf) == varint::max_length_bytes);
+	}
+	std::puts("pointer overload matches the string overload OK");
+
 	std::puts("all varint tests passed");
 	return 0;
 }

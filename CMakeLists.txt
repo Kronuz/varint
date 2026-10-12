@@ -19,7 +19,17 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   add_executable(varint_test test/test.cc)
   target_link_libraries(varint_test PRIVATE varint)
+  target_compile_definitions(varint_test PRIVATE VARINT_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
   add_test(NAME varint COMMAND varint_test)
+
+  # libFuzzer target (Clang): cmake -DVARINT_FUZZ=ON -DCMAKE_CXX_COMPILER=clang++
+  option(VARINT_FUZZ "Build the libFuzzer target" OFF)
+  if(VARINT_FUZZ)
+    add_executable(varint_fuzz fuzz/fuzz_decode.cc)
+    target_link_libraries(varint_fuzz PRIVATE varint)
+    target_compile_options(varint_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
+    target_link_options(varint_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  endif()
 
   # A runnable tour of the library (not a test): build & run ./build/varint_demo
   add_executable(varint_demo examples/demo.cc)

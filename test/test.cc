@@ -4,6 +4,7 @@
 #include "../varint.hh"
 
 #include <cassert>
+#include <cstdlib>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -224,6 +225,35 @@ int main() {
 		assert(!varint::leb128::decode(&p, wide.data() + wide.size(), narrow));
 	}
 	std::puts("LEB128 encode/decode OK");
+
+	// Golden fixtures: both formats' bytes for fixed values must not drift.
+	{
+		const unsigned long long values[] = {0, 1, 127, 128, 254, 255, 256, 300, 16383, 16384, 65535, 65536,
+			4294967295ULL, 4294967296ULL, 1099511627776ULL, 9223372036854775807ULL, ~0ULL};
+		std::string length_bytes, leb_bytes;
+		for (auto v : values) {
+			char buf[varint::max_length_bytes];
+			length_bytes.append(buf, varint::serialise_length(buf, v));
+			leb_bytes.append(buf, varint::leb128::encode(buf, v));
+		}
+		auto check = [](const char* name, const std::string& bytes) {
+			std::string path = std::string(VARINT_FIXTURES) + "/" + name;
+			if (std::getenv("VARINT_WRITE_FIXTURES")) {
+				std::FILE* f = std::fopen(path.c_str(), "wb");
+				std::fwrite(bytes.data(), 1, bytes.size(), f);
+				std::fclose(f);
+			}
+			std::string golden;
+			if (std::FILE* f = std::fopen(path.c_str(), "rb")) {
+				for (int c; (c = std::fgetc(f)) != EOF;) { golden.push_back(char(c)); }
+				std::fclose(f);
+			}
+			assert(golden == bytes);
+		};
+		check("length.bin", length_bytes);
+		check("leb128.bin", leb_bytes);
+	}
+	std::puts("golden fixtures OK");
 
 	std::puts("all varint tests passed");
 	return 0;

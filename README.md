@@ -1,5 +1,7 @@
 # varint
 
+[![CI](https://github.com/Kronuz/varint/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/varint/actions/workflows/ci.yml)
+
 A small, header-only **length/integer codec**, for C++17 and later: a
 byte-below-255-is-the-length fast path, a compact base-128 continuation for
 anything larger, plus a length-prefixed string, a one-byte bool, and a

@@ -18,7 +18,9 @@ CMakeLists.txt         Header-only INTERFACE target `varint` (+ alias
                        varint::varint); no FetchContent, no external
                        dependency; CTest test `varint`.
 LICENSE                MIT, Copyright (c) 2026 Germán Méndez Bravo.
-README.md              What it is, install, usage, API, the format.
+README.md              What it is, install, quick start.
+docs/API.md            The API reference, including leb128.
+docs/varint.d2         The README diagram's source (docs/varint.svg is rendered from it).
 ARCHITECTURE.md        Why the format looks the way it does, the overlong-
                        input guard, why bool is ASCII not a raw byte.
 ```
@@ -62,11 +64,11 @@ C++17 is the floor; nothing here needs C++20.
   library) stay wire-compatible with data/peers that predate the migration.
   If you ever need a genuinely different encoding, it is a new function, not
   a change to this one.
-- **The overlong-input guard (`kMaxShift`) must stay in `unserialise_length`.**
-  Removing it turns a corrupted/hostile buffer into either an out-of-bounds
-  read (a buffer that isn't null-terminated and never produces a
-  top-bit-set byte) or undefined behavior (shifting a 64-bit value by 70+
-  bits). See ARCHITECTURE.md's own section on this.
+- **The overlong-input guards must stay in `unserialise_length`**: the shift
+  stops at 64, a chunk that would lose bits is rejected, and the `+ 255` bias
+  cannot wrap. Removing one turns a corrupted or hostile buffer into a read past
+  any valid encoding, undefined behavior (a shift by 64 or more), or a silently
+  wrong length. See ARCHITECTURE.md's section on this.
 - **`unserialise_string`'s output is a view into the input buffer, not a
   copy.** Don't change this to return an owning `std::string` without
   updating every call site that currently relies on zero-copy decode (this

@@ -1,165 +1,100 @@
 # varint
 
 [![CI](https://github.com/Kronuz/varint/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/varint/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)
+![Header-only](https://img.shields.io/badge/header--only-yes-green.svg)
 
-A small, header-only **length/integer codec**, for C++17 and later: a
-byte-below-255-is-the-length fast path, a compact base-128 continuation for
-anything larger, plus a length-prefixed string, a one-byte bool, and a
-one-byte char -- all exception-free.
+A compact, exception-free length and integer codec for C++17: one byte for any
+length below 255, a base-128 tail for the rest, plus length-prefixed strings,
+bools, chars, and standard LEB128. For wire protocols and on-disk records that
+decode untrusted input.
 
-## What it is
+![varint: lengths below 255 take one byte; larger ones a marker and a base-128 tail](docs/varint.svg)
 
-Four encode/decode pairs over a compact binary wire format:
+## ✨ Highlights
 
-- `serialise_length` / `unserialise_length<T>` -- an unsigned integer. A
-  `serialise_length(char* out, value)` overload writes into a caller buffer of
-  `max_length_bytes` and returns the end, with no allocation, for hot encoding loops.
-- `serialise_string` / `unserialise_string` -- a length-prefixed byte string.
-- `serialise_bool` / `unserialise_bool` -- one ASCII byte, `'0'` or `'1'`.
-- `serialise_char` / `unserialise_char` -- one raw byte.
-- `leb128::encode` / `leb128::decode<T>` -- standard LEB128, a separate format that is
-  smaller for values of 255 and above (no marker byte), for large integers such as
-  sparse doc-id gaps.
+- **One byte for the common case.** Short strings and small counts cost a single
+  length byte.
+- **No exceptions.** Every decoder returns `false` on truncated or malformed
+  input, so parsing a socket buffer is a plain `if`.
+- **Hardened against hostile input**, with overflow checks on every byte and a
+  libFuzzer target over every decoder.
+- **No allocation on the hot path.** `serialise_length(char* out, v)` writes into
+  your buffer.
+- **LEB128 too**, for large integers such as sparse id gaps.
+- **Wire-compatible** with Xapiand's original `length.h` encoding.
 
-The length encoding: a byte below 255 IS the length, verbatim -- the
-overwhelmingly common case (short strings, small counts) costs exactly one
-byte. A byte of `0xff` introduces `(length - 255)`, encoded as a
-little-endian base-128 sequence: every byte holds 7 bits of the value in its
-low bits, every byte except the last has its top bit clear, and the LAST
-byte has its top bit set, marking the end (the reverse convention from
-classic LEB128, where the continuation bit marks "more bytes follow" rather
-than "this is the last one").
+## 📦 Installation
 
-Every `unserialise_*` function returns `bool` -- `false` on truncated or
-malformed input -- instead of throwing, so decoding untrusted/partial input
-from a socket or a file is a plain `if`, not a `try`/`catch`.
-
-## Install
-
-Header-only: `varint.hh` is the whole library. Requires C++17 and nothing
-else beyond the standard library.
-
-With CMake `FetchContent`:
+Requires a C++17 compiler; CMake 3.14 or newer for the CMake route. CI builds it
+on Linux (x86_64, arm64), macOS (arm64, x86_64), and FreeBSD, plus ASan, UBSan,
+and TSan builds.
 
 ```cmake
 include(FetchContent)
-FetchContent_Declare(
-  varint
+FetchContent_Declare(varint
   GIT_REPOSITORY https://github.com/Kronuz/varint.git
-  GIT_TAG        main
-)
+  GIT_TAG        main)
 FetchContent_MakeAvailable(varint)
 
-target_link_libraries(your_target PRIVATE varint::varint)
+target_link_libraries(my_app PRIVATE varint::varint)
 ```
 
-Then:
+Or copy `varint.hh` onto your include path.
 
-```cpp
-#include "varint.hh"
-```
-
-## Usage
+## 🚀 Quick start
 
 ```cpp
 #include "varint.hh"
 
-std::string wire;
-wire += varint::serialise_string("hello");
-wire += varint::serialise_length(1'000'000);
-wire += varint::serialise_bool(true);
+#include <string>
 
-const char* p = wire.data();
-const char* end = p + wire.size();
+int main() {
+	std::string wire = varint::serialise_string("hello") + varint::serialise_length(1'000'000);
 
-std::string_view name;
-if (!varint::unserialise_string(&p, end, name)) { /* truncated/malformed */ }
-
-unsigned long long count = 0;
-if (!varint::unserialise_length(&p, end, count)) { /* truncated/malformed */ }
-
-bool flag = false;
-if (!varint::unserialise_bool(&p, end, flag)) { /* truncated/malformed */ }
+	const char* p = wire.data();
+	const char* end = p + wire.size();
+	std::string_view name;
+	unsigned long long count = 0;
+	if (!varint::unserialise_string(&p, end, name) || !varint::unserialise_length(&p, end, count)) {
+		return 1;   // truncated or malformed
+	}
+	// name == "hello", count == 1000000, p == end
+}
 ```
 
-Each `unserialise_*` call advances `*p` past what it consumed, so a sequence
-of fields decodes by chaining calls and checking each return value -- there
-is no separate "how many bytes did that take" step.
+[`examples/demo.cc`](examples/demo.cc) encodes and decodes a short message.
 
-## API reference
+## 🎯 When to use it
 
-```cpp
-namespace varint {
+- ✅ Length prefixes and counts in a binary format, decoded from untrusted bytes.
+- ❌ Schema-driven messages: use a serialization format (MessagePack, protobuf)
+  when you need fields, types, and evolution.
 
-std::string serialise_length(unsigned long long len);
-char* serialise_length(char* out, unsigned long long len) noexcept;  // room for max_length_bytes
+## 📚 Documentation
 
-template <typename T>
-bool unserialise_length(const char** p, const char* end, T& out);
+- [docs/API.md](docs/API.md): every encoder and decoder, including `leb128`.
+- [ARCHITECTURE.md](ARCHITECTURE.md): the wire format and the overlong-input
+  guards.
+- [AGENTS.md](AGENTS.md): repository map, invariants, and traps.
 
-std::string serialise_string(std::string_view input);
-bool unserialise_string(const char** p, const char* end, std::string_view& out);
-
-std::string serialise_bool(bool value);
-bool unserialise_bool(const char** p, const char* end, bool& out);
-
-std::string serialise_char(char value);
-bool unserialise_char(const char** p, const char* end, char& out);
-
-} // namespace varint
-```
-
-- **`unserialise_length` is templated on the destination type** so it binds
-  equally to `std::uint64_t`, `unsigned long long`, or `std::size_t` --
-  distinct types under LP64 even at the same width, so a single fixed-type
-  reference parameter would reject some of them without a cast at the call
-  site.
-- **`unserialise_string`'s output is a view, not a copy** -- it points into
-  the same buffer `*p` was reading from, valid exactly as long as that
-  buffer is.
-- **A bool serialises as ASCII `'0'`/`'1'`, not byte `0x00`/`0x01`** -- a raw
-  hex dump of a message stays readable at a glance; `unserialise_bool`
-  rejects any other byte rather than treating it as truthy/falsy.
-
-## Build & test
+## 🛠️ Building and testing
 
 ```sh
 cmake -B build && cmake --build build && ctest --test-dir build
+./build/varint_demo
 ```
 
-The test checks exact byte output against a captured reference vector set
-(so a change here can't silently drift the wire format), round-trips every
-value through encode+decode, confirms `unserialise_length` binds to
-different destination types without a cast, and confirms truncated/empty
-input is rejected rather than misread.
+The tests pin exact bytes against reference vectors, so the wire format cannot
+drift silently.
 
-## Examples
+## 🤝 Contributing
 
-[`examples/demo.cc`](examples/demo.cc) is a runnable tour:
+Issues and pull requests are welcome. The wire format is fixed; read
+[AGENTS.md](AGENTS.md) first. CI must pass on every platform.
 
-```sh
-cmake -B build && cmake --build build && ./build/varint_demo
-```
+## 📄 License
 
-It encodes a string, a length, and a bool into one buffer, then decodes
-them back out in order.
-
-## Provenance
-
-This continues from a 2026 rewrite inside [`cluster`](https://github.com/Kronuz/cluster)
-(Germán Méndez Bravo's own code, vendored there header-only and
-exception-free for wire compatibility with an existing discovery protocol).
-It is wire-compatible with Xapiand's original `length.h`/`length.cc`, which
-Xapiand ships under the MIT license with Olly Betts' permission (Xapiand
-commit `1691e5b2e`, 2015). This implementation is structurally independent of
-that code -- a different error-handling model (`bool` return instead of
-exceptions), a templated destination type, no file-descriptor streaming
-variants -- and is extracted to stand on its own so `cluster` (and any other
-wire-compatible consumer) can depend on it instead of each carrying a private
-copy. See
-[ARCHITECTURE.md](ARCHITECTURE.md) for the format in detail and
-[AGENTS.md](AGENTS.md) for the repo map and invariants.
-
-## License
-
-MIT, Copyright (c) 2026 Germán Méndez Bravo. See [LICENSE](LICENSE).
+MIT, Copyright (c) 2026 Germán Méndez Bravo. See [LICENSE](LICENSE). An
+independent implementation, wire-compatible with Xapiand's `length.h`.

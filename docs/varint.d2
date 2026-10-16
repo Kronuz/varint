@@ -1,0 +1,18 @@
+# varint: the length encoding, one byte for the common case.
+# Render: d2 --layout elk --sketch --theme 302 docs/varint.d2 docs/varint.svg
+direction: right
+
+small: "length < 255" {
+  label: "length < 255\n1 byte: the length itself"
+}
+
+large: "length ≥ 255" {
+  label: "length ≥ 255\n0xff, then (length − 255) in base 128\nlast byte has the top bit set"
+}
+
+decode: unserialise_length {
+  label: "unserialise_*\nreturns false on truncated\nor malformed input"
+}
+
+small -> decode
+large -> decode

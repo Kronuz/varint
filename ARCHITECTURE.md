@@ -42,9 +42,11 @@ it's superior to the alternative. The decode loop:
 
 ```cpp
 for (;;) {
-    if (*p == end || shift > kMaxShift) return false;
+    if (*p == end || shift >= std::numeric_limits<unsigned long long>::digits) return false;
     auto byte = static_cast<unsigned char>(*(*p)++);
-    len |= static_cast<unsigned long long>(byte & 0x7f) << shift;
+    auto chunk = static_cast<unsigned long long>(byte & 0x7f);
+    if (chunk > (std::numeric_limits<unsigned long long>::max() >> shift)) return false;
+    len |= chunk << shift;
     shift += 7;
     if (byte & 0x80) break; // this was the last byte
 }
@@ -57,17 +59,20 @@ decoder never needs to know the value's magnitude in advance.
 
 ## The overlong-input guard
 
-`kMaxShift` (`sizeof(unsigned long long) * 8 / 7 * 7`, i.e. the largest
-multiple of 7 not exceeding the type's bit width) bounds how many
-continuation bytes `unserialise_length` will ever read before giving up.
-Without it, a corrupted or hostile buffer whose bytes never have the top bit
-set would make the decoder read arbitrarily far past where a 64-bit integer
-could sensibly still be accumulating value, either running off a buffer
-that isn't null-terminated or eventually shifting bits out of range (shifting
-a 64-bit value by 70+ is undefined behavior in C++). The guard turns "read
-until something stops us" into "read until something stops us, or we've
-clearly gone further than any valid encoding ever would," returning `false`
-in the latter case instead of continuing to read based on untrusted input.
+Three checks keep a corrupted or hostile buffer from being misread:
+
+1. **The shift stops at 64.** The loop gives up once `shift` reaches the bit
+   width of `unsigned long long`, so a run of bytes that never sets the top bit
+   cannot read on past where any valid encoding ends, and never shifts by 64 or
+   more (undefined behavior).
+2. **No bit is silently dropped.** A chunk whose bits would be shifted out of 64
+   bits is an overflow, rejected rather than truncated.
+3. **The final `+ 255` cannot wrap.** A decoded remainder above `max - 255` is
+   rejected before the bias is added; a value that does not fit the destination
+   type `T` is rejected last.
+
+Each check returns `false` rather than throwing or reading further on untrusted
+input. `fuzz/fuzz_decode.cc` exercises every decoder against arbitrary bytes.
 
 ## Why `unserialise_length` is templated on the destination type
 

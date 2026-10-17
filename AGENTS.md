@@ -14,6 +14,8 @@ test/test.cc          Runnable smoke test: exact byte vectors against a
                        truncated-input rejection.
 examples/demo.cc       A runnable tour (not a test): encode/decode a small
                        multi-field message.
+bench/bench.cc         LEB128 decode throughput over index-like streams
+                       (./build/varint_bench).
 CMakeLists.txt         Header-only INTERFACE target `varint` (+ alias
                        varint::varint); no FetchContent, no external
                        dependency; CTest test `varint`.
@@ -90,6 +92,16 @@ C++17 is the floor; nothing here needs C++20.
   truthy/falsy coercion.** Don't change `unserialise_bool` to accept "any
   nonzero byte is true" -- that would silently paper over a desynchronized
   stream instead of surfacing it.
+
+- **A faster-looking LEB128 decoder lost in strata (2026-10-16).** A one-byte
+  branch plus a one-load path for up to ten bytes (`__builtin_ctzll` over the
+  stop bits, payload packed with shifts) ran 1.5-2x faster than the byte loop
+  on uniform values in `bench/bench.cc`, but 0.87x on the 1-3-byte mix skip
+  entries use (gate VM), and strata's queries got slower with it: `TOP_10`
+  1.052x and `COUNT` 1.020x over 600 intersection and phrase queries
+  (`strata/docs/perf/query-gap-merged.md`). Mispredicted lengths, not byte
+  loads, bound real streams. A new decoder must win strata's A/B, not only
+  this benchmark.
 
 ## Standalone vs. cluster
 

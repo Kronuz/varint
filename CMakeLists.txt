@@ -31,6 +31,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_link_options(varint_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
   endif()
 
+  # LEB128 decoding throughput, fast paths against the byte loop: ./build/varint_bench
+  add_executable(varint_bench bench/bench.cc)
+  target_link_libraries(varint_bench PRIVATE varint)
+  target_compile_options(varint_bench PRIVATE -O3)
+
   # A runnable tour of the library (not a test): build & run ./build/varint_demo
   add_executable(varint_demo examples/demo.cc)
   target_link_libraries(varint_demo PRIVATE varint)

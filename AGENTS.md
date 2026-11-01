@@ -22,7 +22,6 @@ CMakeLists.txt         Header-only INTERFACE target `varint` (+ alias
 LICENSE                MIT, Copyright (c) 2026 Germán Méndez Bravo.
 README.md              What it is, install, quick start.
 docs/API.md            The API reference, including leb128.
-docs/varint.d2         The README diagram's source (docs/varint.svg is rendered from it).
 ARCHITECTURE.md        Why the format looks the way it does, the overlong-
                        input guard, why bool is ASCII not a raw byte.
 ```

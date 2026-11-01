@@ -87,28 +87,74 @@ Not for:
 
 ## ⚡ Performance
 
-`varint::leb128::decode` over streams of 4,000,000 values, in nanoseconds per value, best of
-5 rounds. The streams model what a search index decodes: one-byte deltas, skip entries of one
-to three bytes, and uniform 32-bit and 64-bit values.
+Time to decode one LEB128 value, in nanoseconds (lower is better), from a byte buffer that
+ends at an `end` pointer, over streams of 4,000,000 values; each cell is the median of five
+runs of the bench's best of five rounds. Each row is a stream and each column a decoder, not
+a mode.
 
-| Values | Apple M4 Pro | Intel Core i9-9980HK |
-|---|---:|---:|
-| one byte | 0.52 | 1.38 |
-| 1-3 bytes (skip entries) | 2.10 | 3.61 |
-| uniform 32-bit | 2.98 | 5.56 |
-| uniform 64-bit | 7.88 | 13.52 |
+Rows:
 
-Apple clang 17 on macOS, `-O3 -DNDEBUG`; the same command on both machines:
+- `one byte`: values below 128.
+- `1-3 bytes (skip entries)`: three in four values below 128 and one in four below 2^21, the
+  mix of a search index's skip entries.
+- `uniform 32-bit` and `uniform 64-bit`: random values of that width.
+
+Columns:
+
+- `varint`: `varint::leb128::decode`.
+- `byte loop`: a hand-written loop that checks `end` before each byte and stops after ten.
+- `LLVM`: `decodeULEB128` from [LLVM](https://github.com/llvm/llvm-project) 23.1
+  (`llvm/Support/LEB128.h`, identical in 23.1.2 and 23.1.4).
+- `protobuf`: `CodedInputStream::ReadVarint64` from
+  [protobuf](https://github.com/protocolbuffers/protobuf) v36.2, built from source.
+- `varint × faster than the best other`: the fastest of the other three decoders' time
+  divided by `varint`'s, so above 1 `varint` is faster.
+
+All four return the same values and consume the same bytes on these streams (the bench exits
+with an error otherwise). `varint`, `LLVM` and the byte loop check `end` before every byte,
+and `varint` and `LLVM` also reject a value over 64 bits; `protobuf` checks once per value
+that ten bytes remain.
+
+Apple M4 Pro, macOS 26 (arm64):
+
+| Values | varint | byte loop | LLVM | protobuf | varint × faster than the best other |
+|---|---:|---:|---:|---:|---:|
+| one byte | 0.51 | 0.51 | 0.64 | 1.80 | 1.00 |
+| 1-3 bytes (skip entries) | 2.22 | 1.97 | 2.15 | 3.37 | 0.89 |
+| uniform 32-bit | 2.70 | 1.97 | 2.41 | 2.37 | 0.73 |
+| uniform 64-bit | 7.86 | 5.98 | 6.62 | 6.75 | 0.76 |
+
+Intel Core i9-9980HK, macOS 15 (x86-64):
+
+| Values | varint | byte loop | LLVM | protobuf | varint × faster than the best other |
+|---|---:|---:|---:|---:|---:|
+| one byte | 1.09 | 1.20 | 2.17 | 1.16 | 1.06 |
+| 1-3 bytes (skip entries) | 3.27 | 3.92 | 4.61 | 4.13 | 1.20 |
+| uniform 32-bit | 5.85 | 8.39 | 8.51 | 3.80 | 0.65 |
+| uniform 64-bit | 12.80 | 18.69 | 18.37 | 10.84 | 0.85 |
+
+On the M4 Pro `varint` ties the byte loop on one-byte values and trails the fastest other
+decoder on longer ones; on the i9 it beats the byte loop and LLVM on every row and trails
+protobuf on the uniform rows.
+
+Both machines: Apple clang 17.0.0, CMake 4.4, `-O3 -DNDEBUG` for the bench and for protobuf,
+which the bench builds from source (abseil is Homebrew's). To rebuild and rerun the table:
 
 ```sh
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target varint_bench
+brew install llvm abseil
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DVARINT_BENCH_COMPARATORS=ON -DLLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
+cmake --build build --target varint_bench --parallel
 ./build/varint_bench
 ```
+
+Without `-DVARINT_BENCH_COMPARATORS=ON` the bench times `varint` and the byte loop and needs
+nothing else. [docs/perf](docs/perf/README.md) has the run-to-run range, the method and the
+bounds each decoder checks.
 
 ## 📚 Documentation
 
 - [docs/API.md](docs/API.md): every encoder and decoder, including `leb128`.
+- [docs/perf](docs/perf/README.md): the benchmark's method, spread and bounds handling.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the wire format and the overlong-input guards.
 - [AGENTS.md](AGENTS.md): repository map, invariants and traps.
 - [Catalog entry](https://github.com/Kronuz/cpp-libraries/blob/main/AGENTS.md#varint) in
@@ -123,6 +169,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 `./build/varint_demo` runs the tour and `./build/varint_bench` times LEB128 decoding;
+`-DVARINT_BENCH_COMPARATORS=ON` adds LLVM and protobuf to the bench (see Performance), and
 `-DVARINT_FUZZ=ON` adds the libFuzzer target, which needs a Clang with libFuzzer.
 
 ## 🤝 Contributing

@@ -85,6 +85,27 @@ Not for:
 - Interchange with standard LEB128 readers through `serialise_length`: its tail marks the
   last byte, the reverse of LEB128's continuation bit. Use `varint::leb128` there.
 
+## ⚡ Performance
+
+`varint::leb128::decode` over streams of 4,000,000 values, in nanoseconds per value, best of
+5 rounds. The streams model what a search index decodes: one-byte deltas, skip entries of one
+to three bytes, and uniform 32-bit and 64-bit values.
+
+| Values | Apple M4 Pro | Intel Core i9-9980HK |
+|---|---:|---:|
+| one byte | 0.52 | 1.38 |
+| 1-3 bytes (skip entries) | 2.10 | 3.61 |
+| uniform 32-bit | 2.98 | 5.56 |
+| uniform 64-bit | 7.88 | 13.52 |
+
+Apple clang 17 on macOS, `-O3 -DNDEBUG`; the same command on both machines:
+
+```sh
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target varint_bench
+./build/varint_bench
+```
+
 ## 📚 Documentation
 
 - [docs/API.md](docs/API.md): every encoder and decoder, including `leb128`.

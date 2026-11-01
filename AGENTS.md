@@ -15,13 +15,16 @@ test/test.cc          Runnable smoke test: exact byte vectors against a
 examples/demo.cc       A runnable tour (not a test): encode/decode a small
                        multi-field message.
 bench/bench.cc         LEB128 decode throughput over index-like streams
-                       (./build/varint_bench).
+                       (./build/varint_bench), beside a byte loop and, with
+                       -DVARINT_BENCH_COMPARATORS=ON, LLVM and protobuf.
 CMakeLists.txt         Header-only INTERFACE target `varint` (+ alias
-                       varint::varint); no FetchContent, no external
-                       dependency; CTest test `varint`.
+                       varint::varint); no external dependency (only the
+                       OFF-by-default bench comparators fetch or find any);
+                       CTest test `varint`.
 LICENSE                MIT, Copyright (c) 2026 Germán Méndez Bravo.
 README.md              What it is, install, quick start.
 docs/API.md            The API reference, including leb128.
+docs/perf/             Method, spread and per-machine results of the bench.
 ARCHITECTURE.md        Why the format looks the way it does, the overlong-
                        input guard, why bool is ASCII not a raw byte.
 ```
@@ -44,7 +47,9 @@ consumer vendoring it via `FetchContent` won't build them.
 ## Dependencies
 
 None beyond the standard library: `<cstddef>`, `<string>`, `<string_view>`.
-C++17 is the floor; nothing here needs C++20.
+C++17 is the floor; nothing here needs C++20. Only `varint_bench` with
+`-DVARINT_BENCH_COMPARATORS=ON` fetches protobuf (tag v36.2) and finds LLVM 23.1;
+the library target never depends on either.
 
 ## Conventions
 

@@ -31,10 +31,37 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_link_options(varint_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
   endif()
 
-  # LEB128 decoding throughput, fast paths against the byte loop: ./build/varint_bench
+  # LEB128 decoding throughput against the byte loop: ./build/varint_bench
+  # -DVARINT_BENCH_COMPARATORS=ON adds LLVM's decodeULEB128 (headers from the installed LLVM
+  # 23.1; point LLVM_DIR at its lib/cmake/llvm) and protobuf's CodedInputStream::ReadVarint64
+  # (tag v36.2, built here with the bench's compiler and flags; abseil from the system). Only the
+  # bench target uses them.
   add_executable(varint_bench bench/bench.cc)
   target_link_libraries(varint_bench PRIVATE varint)
   target_compile_options(varint_bench PRIVATE -O3)
+  option(VARINT_BENCH_COMPARATORS "Time LLVM and protobuf LEB128 decoders in varint_bench" OFF)
+  if(VARINT_BENCH_COMPARATORS)
+    enable_language(C)  # LLVM's package config probes for C headers
+    find_package(LLVM 23.1 REQUIRED CONFIG)
+    target_include_directories(varint_bench SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+    target_compile_definitions(varint_bench PRIVATE VARINT_BENCH_LLVM)
+
+    # CodedInputStream lives in libprotobuf-lite; abseil must already be installed.
+    set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(protobuf_BUILD_PROTOC_BINARIES OFF CACHE BOOL "" FORCE)
+    set(protobuf_BUILD_LIBUPB OFF CACHE BOOL "" FORCE)
+    set(protobuf_INSTALL OFF CACHE BOOL "" FORCE)
+    set(protobuf_WITH_ZLIB OFF CACHE BOOL "" FORCE)
+    set(protobuf_LOCAL_DEPENDENCIES_ONLY ON CACHE BOOL "" FORCE)
+    include(FetchContent)
+    FetchContent_Declare(protobuf
+      GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+      GIT_TAG        v36.2
+      GIT_SHALLOW    TRUE)
+    FetchContent_MakeAvailable(protobuf)
+    target_link_libraries(varint_bench PRIVATE protobuf::libprotobuf-lite)
+    target_compile_definitions(varint_bench PRIVATE VARINT_BENCH_PROTOBUF)
+  endif()
 
   # A runnable tour of the library (not a test): build & run ./build/varint_demo
   add_executable(varint_demo examples/demo.cc)

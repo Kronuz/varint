@@ -223,6 +223,16 @@ int main() {
 		std::string wide = bytes(1ULL << 40);
 		p = wide.data();
 		assert(!varint::leb128::decode(&p, wide.data() + wide.size(), narrow));
+		std::string overlong("\x80\x00", 2);  // 0 in two bytes
+		p = overlong.data();
+		assert(!varint::leb128::decode(&p, overlong.data() + overlong.size(), back));
+		for (unsigned long long v : {0ULL, 127ULL, 128ULL, 16383ULL, 16384ULL, ~0ULL})
+			assert(varint::leb128::size(v) == bytes(v).size());
+		static_assert(varint::leb128::zigzag(0) == 0 && varint::leb128::zigzag(-1) == 1 &&
+					  varint::leb128::zigzag(1) == 2 && varint::leb128::zigzag(-2) == 3);
+		for (long long v : {0LL, 1LL, -1LL, 63LL, -64LL, std::numeric_limits<long long>::max(),
+							std::numeric_limits<long long>::min()})
+			assert(varint::leb128::unzigzag(varint::leb128::zigzag(v)) == v);
 	}
 	std::puts("LEB128 encode/decode OK");
 

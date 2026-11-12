@@ -152,6 +152,21 @@ namespace leb128 {
 // Most bytes a 64-bit value takes.
 inline constexpr std::size_t max_bytes = 10;
 
+// Bytes v takes, 1 to max_bytes.
+inline constexpr std::size_t size(unsigned long long v) noexcept {
+	std::size_t n = 1;
+	for (; v >= 0x80; v >>= 7) ++n;
+	return n;
+}
+
+// Zigzag maps signed to unsigned so small magnitudes stay short: 0, -1, 1, -2 -> 0, 1, 2, 3.
+inline constexpr unsigned long long zigzag(long long v) noexcept {
+	return (static_cast<unsigned long long>(v) << 1) ^ static_cast<unsigned long long>(v >> 63);
+}
+inline constexpr long long unzigzag(unsigned long long v) noexcept {
+	return static_cast<long long>(v >> 1) ^ -static_cast<long long>(v & 1);
+}
+
 // Writes v at out (room for max_bytes) and returns the end.
 inline char* encode(char* out, unsigned long long v) noexcept {
 	while (v >= 0x80) {
@@ -162,8 +177,8 @@ inline char* encode(char* out, unsigned long long v) noexcept {
 	return out;
 }
 
-// Reads a value from [*p, end), advancing *p. Returns false on truncated input or a
-// value wider than 64 bits or than `out`.
+// Reads a value from [*p, end), advancing *p. Returns false on truncated or overlong
+// input (a trailing zero byte) or a value wider than 64 bits or than `out`.
 template <typename T>
 inline bool decode(const char** p, const char* end, T& out) noexcept {
 	unsigned long long v = 0;
@@ -173,7 +188,10 @@ inline bool decode(const char** p, const char* end, T& out) noexcept {
 		auto chunk = static_cast<unsigned long long>(byte & 0x7f);
 		if (shift == 63 && chunk > 1) return false;
 		v |= chunk << shift;
-		if (!(byte & 0x80)) break;
+		if (!(byte & 0x80)) {
+			if (byte == 0 && shift != 0) return false;
+			break;
+		}
 	}
 	if (v > static_cast<unsigned long long>(std::numeric_limits<T>::max())) return false;
 	out = static_cast<T>(v);

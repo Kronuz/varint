@@ -20,6 +20,9 @@ bool unserialise_char(const char** p, const char* end, char& out);
 
 namespace leb128 {
 inline constexpr std::size_t max_bytes = 10;
+constexpr std::size_t size(unsigned long long v) noexcept;   // bytes encode writes
+constexpr unsigned long long zigzag(long long v) noexcept;   // 0, -1, 1, -2 -> 0, 1, 2, 3
+constexpr long long unzigzag(unsigned long long v) noexcept;
 char* encode(char* out, unsigned long long v) noexcept;   // room for max_bytes
 template <typename T>
 bool decode(const char** p, const char* end, T& out) noexcept;
